@@ -3,3 +3,5 @@ click
 SQLAlchemy==1.2.5
 psycopg2==2.7.4
 alembic==0.9.9
+-e git+https://github.com/OpenDataServices/flatten-tool.git@daef209ac08f21a0660d8bc34a37b26d2966b940#egg=flattentool
+

@@ -19,3 +19,11 @@ TODO: configure this better
 * `sedldata upgrade`: alembic creates the database
 * `sedldata load`: creates a row with the current time
 * `sedldata test`: dumps the rows
+
+## Flattentool
+
+Flattentool command to unflatten sample data.
+
+flatten-tool unflatten -f xlsx -o unflattened.json -m deals --metatab-name Meta --metatab-vertical-orientation 'SEDL - Key Fund Populated (2018-08-07).xlsx' --id-name identifier
+
+
