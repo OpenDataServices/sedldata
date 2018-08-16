@@ -7,6 +7,7 @@ setup(
     py_modules=['sedldata'],
     install_requires=[
         'Click',
+        'SQLAlchemy',
         'alembic',
         'psycopg2'
     ],

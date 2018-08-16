@@ -32,6 +32,7 @@ def load():
     now = datetime.datetime.now()
     i = metatable.insert()
     i.execute(load_datetime=now, data_source="Test")
+    click.echo("Loaded test: %s" % now)
 
 
 @cli.command()
