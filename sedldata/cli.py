@@ -1,10 +1,43 @@
 import os
+import json
 import click
 import datetime
 import alembic.config
 import sqlalchemy as sa
 
-from sedldata.database import metatable
+from sedldata.database import datatable
+
+
+def xl_to_json(infile):
+    json_data = """
+{
+    "deals": [
+        {
+            "id": "123",
+            "org": "Acme Ltd.",
+            "value": "1,000,000",
+            "investments": [
+                {
+                    "id": "abc",
+                    "description": "Sketchy stuff"
+                },
+                {
+                    "id": "efg",
+                    "description": "Definitely not explosives"
+                }
+            ]
+        }
+    ]
+}
+"""
+    try:
+        with open(os.path.join(infile)) as file:
+            # TODO: unflatten
+            data = json.loads(json_data)
+    except Exception as e:
+        raise e
+    
+    return data
 
 
 @click.group()
@@ -27,20 +60,22 @@ def upgrade():
 
 
 @cli.command()
-def load():
+@click.argument('infile')
+def load(infile):
     # Load something into the database
     now = datetime.datetime.now()
-    i = metatable.insert()
-    i.execute(load_datetime=now, data_source="Test")
-    click.echo("Loaded test: %s" % now)
+    unflattened = xl_to_json(infile)
+    i = datatable.insert()
+    i.execute(date_loaded=now, data=unflattened)
+    click.echo("Loaded at: %s" % now)
 
 
 @cli.command()
-def test():
-    # Dump the metatable
+def dump():
+    # Dump the datatable
     click.echo("Dump\n")
 
-    s = metatable.select()
+    s = datatable.select()
     rows = s.execute()
     for row in rows:
         print(row)
