@@ -2,41 +2,31 @@ import os
 import json
 import click
 import datetime
+import tempfile
 import alembic.config
 import sqlalchemy as sa
+from flattentool import unflatten
 
 from sedldata.database import datatable
 
 
-def xl_to_json(infile):
-    json_data = """
-{
-    "deals": [
-        {
-            "id": "123",
-            "org": "Acme Ltd.",
-            "value": "1,000,000",
-            "investments": [
-                {
-                    "id": "abc",
-                    "description": "Sketchy stuff"
-                },
-                {
-                    "id": "efg",
-                    "description": "Definitely not explosives"
-                }
-            ]
-        }
-    ]
-}
-"""
+def xl_to_json(infile, outfile):
     try:
-        with open(os.path.join(infile)) as file:
-            # TODO: unflatten
-            data = json.loads(json_data)
+        unflatten(
+                input_name=infile,
+                output_name=outfile,
+                input_format='xlsx',
+                # schema='schema.json',
+                metatab_name='Meta',
+                metatab_vertical_orientation=True,
+                root_list_path='deals',
+                id_name='id',
+                root_id='')
+        with open(outfile,'r') as json_file:
+            data = json.load(json_file)
     except Exception as e:
         raise e
-    
+
     return data
 
 
@@ -50,7 +40,8 @@ def upgrade():
     # Let alembic create the tables
     click.echo("Upgrading database")
 
-    alembic_cfg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'alembic.ini'))
+    alembic_cfg_path = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', 'alembic.ini'))
     alembicargs = [
         '--config', alembic_cfg_path,
         '--raiseerr',
@@ -61,10 +52,11 @@ def upgrade():
 
 @cli.command()
 @click.argument('infile')
-def load(infile):
+@click.argument('outfile')
+def load(infile, outfile):
     # Load something into the database
     now = datetime.datetime.now()
-    unflattened = xl_to_json(infile)
+    unflattened = xl_to_json(infile, outfile)
     i = datatable.insert()
     i.execute(date_loaded=now, data=unflattened)
     click.echo("Loaded at: %s" % now)

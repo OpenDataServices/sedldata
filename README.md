@@ -17,13 +17,14 @@ TODO: configure this better
 ## Do stuff
 
 * `sedldata upgrade`: alembic creates the database
-* `sedldata load`: creates a row with the current time
-* `sedldata test`: dumps the rows
+* `sedldata load infile.xlsx outfile.json`: unflattens the input and dumps it to the database
+* `sedldata dump`: dumps the rows
 
 ## Flattentool
 
 Flattentool command to unflatten sample data.
 
-flatten-tool unflatten -f xlsx -o unflattened.json -m deals --metatab-name Meta --metatab-vertical-orientation 'SEDL - Key Fund Populated (2018-08-07).xlsx' --id-name identifier
-
+```
+flatten-tool unflatten -f xlsx -o unflattened.json -m deals --metatab-name Meta --metatab-vertical-orientation 'outfile.xlsx' --id-name identifier
+```
 
