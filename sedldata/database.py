@@ -9,5 +9,6 @@ metadata = sa.MetaData(bind=engine)
 datatable = sa.Table('data', metadata,
                      sa.Column('id', sa.Integer, primary_key=True),
                      sa.Column('date_loaded', sa.DateTime),
+                     sa.Column('load_name', sa.Text),
                      sa.Column('data', JSONB, nullable=False)
                      )

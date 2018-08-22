@@ -2,7 +2,6 @@ import os
 import json
 import click
 import datetime
-import tempfile
 import alembic.config
 import sqlalchemy as sa
 from flattentool import unflatten
@@ -53,13 +52,16 @@ def upgrade():
 @cli.command()
 @click.argument('infile')
 @click.argument('outfile')
-def load(infile, outfile):
+@click.option('--name', default=None)
+def load(infile, outfile, name):
+    if name is None:
+        name = infile
     # Load something into the database
     now = datetime.datetime.now()
     unflattened = xl_to_json(infile, outfile)
     i = datatable.insert()
-    i.execute(date_loaded=now, data=unflattened)
-    click.echo("Loaded at: %s" % now)
+    i.execute(date_loaded=now, load_name=name, data=unflattened)
+    click.echo("Loaded %s at: %s" % (name, now))
 
 
 @cli.command()
