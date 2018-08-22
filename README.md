@@ -17,7 +17,8 @@ TODO: configure this better
 ## Do stuff
 
 * `sedldata upgrade`: alembic creates the database
-* `sedldata load infile.xlsx outfile.json`: unflattens the input and dumps it to the database
+* `sedldata load infile.xlsx outfile.json --name=my_data_load`: unflattens the input and dumps it to the database
+  * `--name` is optional and defaults to the input filename if left out. Should be something human-understandable to help you identify a particular data load. Doesn't need to be unique, but probably helpful if it is.
 * `sedldata dump`: dumps the rows
 
 ## Flattentool
@@ -28,3 +29,8 @@ Flattentool command to unflatten sample data.
 flatten-tool unflatten -f xlsx -o unflattened.json -m deals --metatab-name Meta --metatab-vertical-orientation 'outfile.xlsx' --id-name identifier
 ```
 
+## Servers
+
+* For postgres access and data loading: `ssh root@sedl-db.default.opendataservices.uk0.bigv.io`
+  * Copy new data to the server: `scp MY_FILE.xlsx root@sedl-db.default.opendataservices.uk0.bigv.io:/home/sedldata/data/`
+* For redash frontend: `http://root@sedl-redash.default.opendataservices.uk0.bigv.io:9090`
