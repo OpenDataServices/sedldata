@@ -6,13 +6,13 @@ This is probably just where the script(s) for loading data from a spreadsheet or
 
 ## Setup
 
-At the moment you need to put the postgres database URI in an environment variable on the host.
+Postgres database URI can be in an environment variable on the host:
 
 ```
 export DB_URI=postgresql://user:pa55w0rd@localhost/database
 ```
 
-TODO: configure this better
+Alternatively rename `database.ini.tmpl` to `database.ini` and set params there.
 
 ## Do stuff
 
