@@ -2,6 +2,7 @@ import os
 import json
 import click
 import datetime
+
 import alembic.config
 import sqlalchemy as sa
 from flattentool import unflatten
@@ -15,7 +16,6 @@ def xl_to_json(infile, outfile):
                 input_name=infile,
                 output_name=outfile,
                 input_format='xlsx',
-                # schema='schema.json',
                 metatab_name='Meta',
                 metatab_vertical_orientation=True,
                 root_list_path='deals',
@@ -59,8 +59,8 @@ def load(infile, outfile, name):
     # Load something into the database
     now = datetime.datetime.now()
     unflattened = xl_to_json(infile, outfile)
-    i = datatable.insert()
-    i.execute(date_loaded=now, load_name=name, data=unflattened)
+    insert = datatable.insert()
+    insert.execute(date_loaded=now, load_name=name, data=unflattened)
     click.echo("Loaded %s at: %s" % (name, now))
 
 
@@ -69,7 +69,7 @@ def dump():
     # Dump the datatable
     click.echo("Dump\n")
 
-    s = datatable.select()
-    rows = s.execute()
+    select = datatable.select()
+    rows = select.execute()
     for row in rows:
         print(row)

@@ -1,6 +1,7 @@
 import os
-import sqlalchemy as sa
+
 from configparser import ConfigParser
+import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
 
