@@ -4,7 +4,7 @@ setup(
     name='sedldata',
     version='0.0.1',
     license='BSD',
-    py_modules=['sedldata'],
+    packages=['sedldata'],
     install_requires=[
         'Click',
         'SQLAlchemy',
