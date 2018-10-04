@@ -21,7 +21,7 @@ def config(filename='database.ini', section='postgresql'):
     return db
 
 
-def db_uri():
+def create_db_uri():
     db_uri = os.environ.get('DB_URI')
     if db_uri is None:
         db_params = config()
@@ -35,13 +35,21 @@ def db_uri():
     return db_uri
 
 
-db_uri = db_uri()
-engine = sa.create_engine(db_uri)
-metadata = sa.MetaData(bind=engine)
+datatable = None
+engine = None
 
-datatable = sa.Table('data', metadata,
-                     sa.Column('id', sa.Integer, primary_key=True),
-                     sa.Column('date_loaded', sa.DateTime),
-                     sa.Column('load_name', sa.Text),
-                     sa.Column('data', JSONB, nullable=False)
-                     )
+def init_db(db_uri=None):
+    global datatable
+    global engine
+
+    if not db_uri:
+        db_uri = create_db_uri()
+    engine = sa.create_engine(db_uri)
+    metadata = sa.MetaData(bind=engine)
+
+    datatable = sa.Table('data', metadata,
+                         sa.Column('id', sa.Integer, primary_key=True),
+                         sa.Column('date_loaded', sa.DateTime),
+                         sa.Column('load_name', sa.Text),
+                         sa.Column('data', JSONB, nullable=False)
+                         )

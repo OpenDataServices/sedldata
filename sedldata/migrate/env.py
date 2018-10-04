@@ -8,7 +8,7 @@ import sedldata.database
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-config.set_main_option("sqlalchemy.url", sedldata.database.db_uri)
+config.set_main_option("sqlalchemy.url", str(sedldata.database.engine.url))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
