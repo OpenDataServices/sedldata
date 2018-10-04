@@ -9,7 +9,8 @@ setup(
         'Click',
         'SQLAlchemy',
         'alembic',
-        'psycopg2'
+        'psycopg2',
+        'configparser'
     ],
     entry_points='''
         [console_scripts]

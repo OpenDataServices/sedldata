@@ -6,24 +6,31 @@ This is probably just where the script(s) for loading data from a spreadsheet or
 
 ## Setup
 
-At the moment you need to put the postgres database URI in an environment variable on the host.
+Postgres database URI can be in an environment variable on the host:
 
 ```
 export DB_URI=postgresql://user:pa55w0rd@localhost/database
 ```
 
-TODO: configure this better
+Alternatively rename `database.ini.tmpl` to `database.ini` and set params there.
 
 ## Do stuff
 
 * `sedldata upgrade`: alembic creates the database
-* `sedldata load`: creates a row with the current time
-* `sedldata test`: dumps the rows
+* `sedldata load infile.xlsx outfile.json --name=my_data_load`: unflattens the input and dumps it to the database
+  * `--name` is optional and defaults to the input filename if left out. Should be something human-understandable to help you identify a particular data load. Doesn't need to be unique, but probably helpful if it is.
+* `sedldata dump`: dumps the rows
 
 ## Flattentool
 
 Flattentool command to unflatten sample data.
 
-flatten-tool unflatten -f xlsx -o unflattened.json -m deals --metatab-name Meta --metatab-vertical-orientation 'SEDL - Key Fund Populated (2018-08-07).xlsx' --id-name identifier
+```
+flatten-tool unflatten -f xlsx -o unflattened.json -m deals --metatab-name Meta --metatab-vertical-orientation 'outfile.xlsx' --id-name identifier
+```
 
+## Servers
 
+* For postgres access and data loading: `ssh root@sedl-db.default.opendataservices.uk0.bigv.io`
+  * Copy new data to the server: `scp MY_FILE.xlsx root@sedl-db.default.opendataservices.uk0.bigv.io:/home/sedldata/data/`
+* For redash frontend: `http://root@sedl-redash.default.opendataservices.uk0.bigv.io:9090`
