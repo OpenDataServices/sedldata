@@ -2,7 +2,8 @@ import os
 import getpass
 import subprocess
 
-from sedldata.lib import upgrade, load, load_xlsx, in_notebook, run_sql, get_results
+from sedldata.lib import upgrade, load, load_xlsx, in_notebook, run_sql, get_results, generate_migration
+from sedldata.lib import delete_collection
 from sedldata.database import init_db
 
 
