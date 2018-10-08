@@ -1,6 +1,7 @@
 import os
 from configparser import ConfigParser
 
+import alembic.config
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -69,6 +70,19 @@ class Database:
             sa.Column('organization', JSONB, nullable=False),
             sa.Column('metadata', JSONB)
         )
+
+    def upgrade(self):
+        # Let alembic create the tables
+        print("Upgrading database")
+
+        alembic_cfg_path = os.path.abspath(os.path.join(
+            os.path.dirname(__file__), 'alembic.ini'))
+        alembicargs = [
+            '--config', alembic_cfg_path,
+            '--raiseerr',
+            'upgrade', 'head',
+        ]
+        alembic.config.main(argv=alembicargs)
 
 
 db = Database()

@@ -7,7 +7,7 @@ import alembic.config
 import jinja2
 from flattentool import unflatten
 
-from sedldata.database import Database
+from sedldata.database import db
 
 
 def in_notebook():
@@ -38,20 +38,6 @@ def xl_to_json(infile, outfile):
     return data, source_map_data
 
 
-def upgrade():
-    # Let alembic create the tables
-    print("Upgrading database")
-
-    alembic_cfg_path = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), 'alembic.ini'))
-    alembicargs = [
-        '--config', alembic_cfg_path,
-        '--raiseerr',
-        'upgrade', 'head',
-    ]
-    alembic.config.main(argv=alembicargs)
-
-
 def generate_migration(name):
     print("Generating database migrations")
 
@@ -66,13 +52,12 @@ def generate_migration(name):
 
 
 def load(infile, outfile, name):
-    from sedldata.database import datatable
     if name is None:
         name = infile
     # Load something into the database
     now = datetime.datetime.now()
     unflattened = xl_to_json(infile, outfile)
-    insert = datatable.insert()
+    insert = db.insert()
     insert.execute(date_loaded=now, load_name=name, data=unflattened)
     print("Loaded %s at: %s" % (name, now))
 
@@ -111,8 +96,6 @@ def load_xlsx(collection=None, infile=None, outfile='output.json'):
             if source_item[0].lower().strip().startswith('org'):
                 org_indexes.add(index)
 
-    from sedldata.database import deal_table, org_table
-
     metadata = {key: value for key, value in unflattened.items() if key != 'deals'}
     for num, obj in enumerate(unflattened['deals']):
         now = datetime.datetime.now()
@@ -123,11 +106,11 @@ def load_xlsx(collection=None, infile=None, outfile='output.json'):
             continue
         if num in deal_indexes:
             obj_id = obj.get('id')
-            insert = deal_table.insert()
+            insert = db.deal_table.insert()
             insert.execute(date_loaded=now, collection=collection, deal=obj, deal_id=obj_id, metadata=metadata)
         if num in org_indexes:
             obj_id = obj['id']
-            insert = org_table.insert()
+            insert = db.org_table.insert()
             insert.execute(date_loaded=now, collection=collection, organization=obj, org_id=obj_id, metadata=metadata)
 
     now = datetime.datetime.now()
@@ -173,9 +156,8 @@ def generate_rows(result, limit):
 
 
 def get_results(sql, limit=-1, params=None):
-    from sedldata.database import engine
 
-    with engine.begin() as connection:
+    with db.engine.begin() as connection:
         params = params or []
         sql_result = connection.execute(sql, *params)
         if sql_result.returns_rows:
