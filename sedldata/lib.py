@@ -38,23 +38,18 @@ def xl_to_json(infile, outfile):
     return data, source_map_data
 
 
-class TemporaryClassUpgrade:
-    def __init__(self, db_uri=None):
-        db = Database()
-        db.init_db(db_uri)
+def upgrade():
+    # Let alembic create the tables
+    print("Upgrading database")
 
-    def upgrade(self):
-        # Let alembic create the tables
-        print("Upgrading database")
-
-        alembic_cfg_path = os.path.abspath(os.path.join(
-            os.path.dirname(__file__), 'alembic.ini'))
-        alembicargs = [
-            '--config', alembic_cfg_path,
-            '--raiseerr',
-            'upgrade', 'head',
-        ]
-        alembic.config.main(argv=alembicargs)
+    alembic_cfg_path = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), 'alembic.ini'))
+    alembicargs = [
+        '--config', alembic_cfg_path,
+        '--raiseerr',
+        'upgrade', 'head',
+    ]
+    alembic.config.main(argv=alembicargs)
 
 
 def generate_migration(name):
@@ -137,6 +132,7 @@ def load_xlsx(collection=None, infile=None, outfile='output.json'):
 
     now = datetime.datetime.now()
     print("Loaded %s at: %s" % (collection, now))
+
 
 def delete_collection(collection):
     run_sql('''delete from deal where collection = %s ''', params=[collection])

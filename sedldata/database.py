@@ -7,11 +7,11 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 class Database:
 
-    def __init__(self, engine=None, metadata=None, deal_table=None, org_table=None):
-        self.engine = engine
-        self.metadata = metadata
-        self.deal_table = deal_table
-        self.org_table = org_table
+    def __init__(self):
+        self.engine = None
+        self.metadata = None
+        self.deal_table = None
+        self.org_table = None
 
     def config(self, filename='database.ini', section='postgresql'):
         parser = ConfigParser()
@@ -69,3 +69,6 @@ class Database:
             sa.Column('organization', JSONB, nullable=False),
             sa.Column('metadata', JSONB)
         )
+
+
+db = Database()
