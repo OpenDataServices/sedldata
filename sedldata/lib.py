@@ -1,11 +1,13 @@
-import json
-import os
 import datetime
 import html
+import json
+import os
 
 import alembic.config
 import jinja2
 from flattentool import unflatten
+
+from sedldata.database import Database
 
 
 def in_notebook():
@@ -36,18 +38,23 @@ def xl_to_json(infile, outfile):
     return data, source_map_data
 
 
-def upgrade():
-    # Let alembic create the tables
-    print("Upgrading database")
+class TemporaryClassUpgrade:
+    def __init__(self, db_uri=None):
+        db = Database()
+        db.init_db(db_uri)
 
-    alembic_cfg_path = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), 'alembic.ini'))
-    alembicargs = [
-        '--config', alembic_cfg_path,
-        '--raiseerr',
-        'upgrade', 'head',
-    ]
-    alembic.config.main(argv=alembicargs)
+    def upgrade(self):
+        # Let alembic create the tables
+        print("Upgrading database")
+
+        alembic_cfg_path = os.path.abspath(os.path.join(
+            os.path.dirname(__file__), 'alembic.ini'))
+        alembicargs = [
+            '--config', alembic_cfg_path,
+            '--raiseerr',
+            'upgrade', 'head',
+        ]
+        alembic.config.main(argv=alembicargs)
 
 
 def generate_migration(name):
