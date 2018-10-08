@@ -21,7 +21,7 @@ def config(filename='database.ini', section='postgresql'):
     return db
 
 
-def db_uri():
+def create_db_uri():
     db_uri = os.environ.get('DB_URI')
     if db_uri is None:
         db_params = config()
@@ -35,13 +35,40 @@ def db_uri():
     return db_uri
 
 
-db_uri = db_uri()
-engine = sa.create_engine(db_uri)
-metadata = sa.MetaData(bind=engine)
+engine = None
+metadata = None
 
-datatable = sa.Table('data', metadata,
-                     sa.Column('id', sa.Integer, primary_key=True),
-                     sa.Column('date_loaded', sa.DateTime),
-                     sa.Column('load_name', sa.Text),
-                     sa.Column('data', JSONB, nullable=False)
-                     )
+deal_table = None
+org_table = None
+organization_table = None
+
+def init_db(db_uri=None):
+    global deal_table
+    global org_table
+    global engine
+    global metadata
+    if engine:
+        return
+
+    if not db_uri:
+        db_uri = create_db_uri()
+    engine = sa.create_engine(db_uri)
+    metadata = sa.MetaData(bind=engine)
+
+    deal_table = sa.Table('deal', metadata,
+                          sa.Column('id', sa.Integer, primary_key=True),
+                          sa.Column('collection', sa.Text, nullable=False),
+                          sa.Column('deal_id', sa.Text, nullable=False),
+                          sa.Column('date_loaded', sa.DateTime),
+                          sa.Column('deal', JSONB, nullable=False),
+                          sa.Column('metadata', JSONB)
+                         )
+
+    org_table = sa.Table('organization', metadata,
+                          sa.Column('id', sa.Integer, primary_key=True),
+                          sa.Column('collection', sa.Text, nullable=False),
+                          sa.Column('org_id', sa.Text, nullable=False),
+                          sa.Column('date_loaded', sa.DateTime),
+                          sa.Column('organization', JSONB, nullable=False),
+                          sa.Column('metadata', JSONB)
+                        )

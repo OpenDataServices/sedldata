@@ -4,13 +4,15 @@ setup(
     name='sedldata',
     version='0.0.1',
     license='BSD',
-    packages=['sedldata'],
+    packages=['sedldata', 'sedldata.migrate', 'sedldata.migrate.versions'],
+    package_data={'sedldata': ['alembic.ini'], 'sedldata.migrate': 'script.py.mako'},
     install_requires=[
         'Click',
         'SQLAlchemy',
         'alembic',
         'psycopg2',
-        'configparser'
+        'configparser',
+        'jinja2'
     ],
     entry_points='''
         [console_scripts]
