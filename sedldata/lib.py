@@ -2,12 +2,13 @@ import datetime
 import html
 import json
 import os
+import getpass
 
 import alembic.config
 import jinja2
 from flattentool import unflatten
 
-from sedldata.database import db
+from sedldata.database import Database
 
 
 def in_notebook():
@@ -37,91 +38,6 @@ def xl_to_json(infile, outfile):
 
     return data, source_map_data
 
-
-def generate_migration(name):
-    print("Generating database migrations")
-
-    alembic_cfg_path = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), 'alembic.ini'))
-    alembicargs = [
-        '--config', alembic_cfg_path,
-        '--raiseerr',
-        'revision', '--autogenerate', '-m', name
-    ]
-    alembic.config.main(argv=alembicargs)
-
-
-def load(infile, outfile, name):
-    if name is None:
-        name = infile
-    # Load something into the database
-    now = datetime.datetime.now()
-    unflattened = xl_to_json(infile, outfile)
-    insert = db.insert()
-    insert.execute(date_loaded=now, load_name=name, data=unflattened)
-    print("Loaded %s at: %s" % (name, now))
-
-
-def load_xlsx(collection=None, infile=None, outfile='output.json'):
-    if not collection and in_notebook():
-        collection = input('Please state collections name: ')
-    if not collection:
-        raise ValueError('You need to input a non-empty collection name!')
-
-    if in_notebook():
-        from google.colab import files
-        print('Upload your xlsx SEDL file:')
-        uploaded = files.upload()
-        for file_name in uploaded:
-            infile = 'uploaded.xlsx'
-            with open(infile, '+wb') as f:
-                f.write(uploaded[file_name])
-            break
-    
-    if not infile:
-        raise ValueError('You need to state an input file')
-
-    unflattened, source_map = xl_to_json(infile, outfile)
-    deal_indexes = set()
-    org_indexes = set()
-
-    for path, value in source_map.items():
-        split_path = path.split('/')
-        if len(split_path) < 2:
-            continue
-        index = int(split_path[1])
-        for source_item in value:
-            if source_item[0].lower().strip().startswith('deal'):
-                deal_indexes.add(index)
-            if source_item[0].lower().strip().startswith('org'):
-                org_indexes.add(index)
-
-    metadata = {key: value for key, value in unflattened.items() if key != 'deals'}
-    for num, obj in enumerate(unflattened['deals']):
-        now = datetime.datetime.now()
-        obj_id = obj.get('id')
-        if not obj_id:
-            print(num)
-            print('WARNING: object {} has no id field'.format(obj))
-            continue
-        if num in deal_indexes:
-            obj_id = obj.get('id')
-            insert = db.deal_table.insert()
-            insert.execute(date_loaded=now, collection=collection, deal=obj, deal_id=obj_id, metadata=metadata)
-        if num in org_indexes:
-            obj_id = obj['id']
-            insert = db.org_table.insert()
-            insert.execute(date_loaded=now, collection=collection, organization=obj, org_id=obj_id, metadata=metadata)
-
-    now = datetime.datetime.now()
-    print("Loaded %s at: %s" % (collection, now))
-
-
-def delete_collection(collection):
-    run_sql('''delete from deal where collection = %s ''', params=[collection])
-    run_sql('''delete from organization where collection = %s ''', params=[collection])
-
-
 table = jinja2.Template(
 '''
 <table class="dataframe">
@@ -137,7 +53,7 @@ table = jinja2.Template(
         <tr>
           {% for cell in row %}
               <td style="text-align: left; vertical-align: top">
-                <pre>{{ cell }}</pre>
+                <pre>{{ cell|truncate(50) }}</pre>
               </td>
           {% endfor %}
         </tr>
@@ -155,24 +71,97 @@ def generate_rows(result, limit):
         yield [json.dumps(item, indent=2) if isinstance(item, dict) else html.escape(str(item)) for item in row]
 
 
-def get_results(sql, limit=-1, params=None):
+class Session:
 
-    with db.engine.begin() as connection:
-        params = params or []
-        sql_result = connection.execute(sql, *params)
-        if sql_result.returns_rows:
-            results = {
-                "data": [row for row in generate_rows(sql_result, limit)],
-                "headers": sql_result.keys()
-            }
-            return results
+    def __init__(self, db_uri=None):
+        if in_notebook():
+            if not db_uri:
+                db_uri = 'postgresql://sedldata:{password}@46.43.2.250:5432/sedldata'
+            if '{password}' in db_uri:
+                db_uri = db_uri.format(password=getpass.getpass("Enter database password:  "))
+            self.db = Database(db_uri)
+            self.db.upgrade()
         else:
-            return "Success"
+            self.db = Database()
 
 
-def run_sql(sql, limit=100, params=None):
-    from IPython.core.display import display, HTML
-    results = get_results(sql, limit, params)
-    if results == 'Success':
-        return results
-    display(HTML(table.render(results)))
+    def load_xlsx(self, collection=None, infile=None, outfile='output.json'):
+        if not collection and in_notebook():
+            collection = input('Please state collections name: ')
+        if not collection:
+            raise ValueError('You need to input a non-empty collection name!')
+
+        if in_notebook():
+            from google.colab import files
+            print('Upload your xlsx SEDL file:')
+            uploaded = files.upload()
+            for file_name in uploaded:
+                infile = 'uploaded.xlsx'
+                with open(infile, '+wb') as f:
+                    f.write(uploaded[file_name])
+                break
+        
+        if not infile:
+            raise ValueError('You need to state an input file')
+
+        unflattened, source_map = xl_to_json(infile, outfile)
+        deal_indexes = set()
+        org_indexes = set()
+
+        for path, value in source_map.items():
+            split_path = path.split('/')
+            if len(split_path) < 2:
+                continue
+            index = int(split_path[1])
+            for source_item in value:
+                if source_item[0].lower().strip().startswith('deal'):
+                    deal_indexes.add(index)
+                if source_item[0].lower().strip().startswith('org'):
+                    org_indexes.add(index)
+
+        metadata = {key: value for key, value in unflattened.items() if key != 'deals'}
+        for num, obj in enumerate(unflattened['deals']):
+            now = datetime.datetime.now()
+            obj_id = obj.get('id')
+            if not obj_id:
+                print(num)
+                print('WARNING: object {} has no id field'.format(obj))
+                continue
+            if num in deal_indexes:
+                obj_id = obj.get('id')
+                insert = self.db.deal_table.insert()
+                insert.execute(date_loaded=now, collection=collection, deal=obj, deal_id=obj_id, metadata=metadata)
+            if num in org_indexes:
+                obj_id = obj['id']
+                insert = self.db.org_table.insert()
+                insert.execute(date_loaded=now, collection=collection, organization=obj, org_id=obj_id, metadata=metadata)
+
+        now = datetime.datetime.now()
+        print("Loaded %s at: %s" % (collection, now))
+
+
+    def delete_collection(self, collection):
+        self.run_sql('''delete from deal where collection = %s ''', params=[collection])
+        self.run_sql('''delete from organization where collection = %s ''', params=[collection])
+
+    def get_results(self, sql, limit=-1, params=None):
+
+        with self.db.engine.begin() as connection:
+            params = params or []
+            sql_result = connection.execute(sql, *params)
+            if sql_result.returns_rows:
+                results = {
+                    "data": [row for row in generate_rows(sql_result, limit)],
+                    "headers": sql_result.keys()
+                }
+                return results
+            else:
+                return "Success"
+
+
+    def run_sql(self, sql, limit=100, params=None):
+        from IPython.core.display import display, HTML
+        results = self.get_results(sql, limit, params)
+        if results == 'Success':
+            return results
+        display(HTML(table.render(results)))
