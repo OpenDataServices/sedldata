@@ -53,7 +53,11 @@ table = jinja2.Template(
         <tr>
           {% for cell in row %}
               <td style="text-align: left; vertical-align: top">
-                <pre>{{ cell|truncate(50) }}</pre>
+                {% if not display_full_json %}
+                    <pre>{{ cell|truncate(50) }}</pre>
+                {% else %}
+                    <pre>{{ cell }}</pre>
+                {% end %}
               </td>
           {% endfor %}
         </tr>
@@ -91,7 +95,7 @@ class Session:
         if not collection:
             raise ValueError('You need to input a non-empty collection name!')
 
-        if in_notebook():
+        if in_notebook() and not infile:
             from google.colab import files
             print('Upload your xlsx SEDL file:')
             uploaded = files.upload()
@@ -159,9 +163,10 @@ class Session:
                 return "Success"
 
 
-    def run_sql(self, sql, limit=100, params=None):
+    def run_sql(self, sql, limit=100, params=None, display_full_json=False):
         from IPython.core.display import display, HTML
         results = self.get_results(sql, limit, params)
         if results == 'Success':
             return results
+        results['display_full_json'] = display_full_json
         display(HTML(table.render(results)))
