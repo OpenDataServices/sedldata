@@ -7,6 +7,9 @@ import getpass
 import alembic.config
 import jinja2
 from flattentool import unflatten
+import gspread
+from gspread.utils import fill_gaps
+from openpyxl import Workbook
 
 from sedldata.database import Database
 
@@ -57,7 +60,7 @@ table = jinja2.Template(
                     <pre>{{ cell|truncate(50) }}</pre>
                 {% else %}
                     <pre>{{ cell }}</pre>
-                {% end %}
+                {% endif %}
               </td>
           {% endfor %}
         </tr>
@@ -88,6 +91,15 @@ class Session:
         else:
             self.db = Database()
 
+        self.gspread_client = None
+
+    def get_gspread_client(self):
+        if not self.gspread_client:
+            from google.colab import auth
+            from oauth2client.client import GoogleCredentials
+            auth.authenticate_user()
+            self.gspread_client = gspread.authorize(GoogleCredentials.get_application_default())
+        return self.gspread_client
 
     def load_xlsx(self, collection=None, infile=None, outfile='output.json'):
         if not collection and in_notebook():
@@ -142,6 +154,30 @@ class Session:
 
         now = datetime.datetime.now()
         print("Loaded %s at: %s" % (collection, now))
+
+
+    def load_google_sheet(self, sheet_url=None, collection=None):
+        if not in_notebook:
+            raise Exception("Con not use google spreadsheets outside colab notebooks")
+
+        xlsx_workbook = Workbook(write_only=True)
+        gc = self.get_gspread_client()
+        spreadsheet = gc.open_by_url(sheet_url)
+
+        worksheets = spreadsheet.worksheets()
+
+        for sheet in worksheets:
+            if sheet.title.startswith('#'):
+                continue
+            xlsx_sheet = xlsx_workbook.create_sheet(sheet.title)
+            data = spreadsheet.values_get(sheet.title, params={"valueRenderOption":"UNFORMATTED_VALUE", "dateTimeRenderOption": "FORMATTED_STRING"})
+            data = fill_gaps(data['values'])
+
+            for row in data:
+                xlsx_sheet.append(row)
+
+        xlsx_workbook.save('converted.xlsx')
+        self.load_xlsx(collection=collection, infile='converted.xlsx')
 
 
     def delete_collection(self, collection):

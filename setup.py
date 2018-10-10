@@ -12,7 +12,9 @@ setup(
         'alembic',
         'psycopg2',
         'configparser',
-        'jinja2'
+        'jinja2',
+        'gspread',
+        'openpyxl'
     ],
     entry_points='''
         [console_scripts]
