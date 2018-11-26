@@ -6,13 +6,36 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
 
+#special global just to give db to alembic
+db = None
+
 class Database:
 
-    def __init__(self):
-        self.engine = None
-        self.metadata = None
-        self.deal_table = None
-        self.org_table = None
+    def __init__(self, db_uri=None):
+        if not db_uri:
+            db_uri = self.create_db_uri()
+        self.engine = sa.create_engine(db_uri)
+        self.metadata = sa.MetaData(bind=self.engine)
+
+        self.deal_table = sa.Table(
+            'deal', self.metadata,
+            sa.Column('id', sa.Integer, primary_key=True),
+            sa.Column('collection', sa.Text, nullable=False),
+            sa.Column('deal_id', sa.Text, nullable=False),
+            sa.Column('date_loaded', sa.DateTime),
+            sa.Column('deal', JSONB, nullable=False),
+            sa.Column('metadata', JSONB)
+        )
+
+        self.org_table = sa.Table(
+            'organization', self.metadata,
+            sa.Column('id', sa.Integer, primary_key=True),
+            sa.Column('collection', sa.Text, nullable=False),
+            sa.Column('org_id', sa.Text, nullable=False),
+            sa.Column('date_loaded', sa.DateTime),
+            sa.Column('organization', JSONB, nullable=False),
+            sa.Column('metadata', JSONB)
+        )
 
     def config(self, filename='database.ini', section='postgresql'):
         parser = ConfigParser()
@@ -42,39 +65,13 @@ class Database:
 
         return db_uri
 
-    def init_db(self, db_uri=None):
-        if self.engine:
-            return
-
-        if not db_uri:
-            db_uri = self.create_db_uri()
-        self.engine = sa.create_engine(db_uri)
-        self.metadata = sa.MetaData(bind=self.engine)
-
-        self.deal_table = sa.Table(
-            'deal', self.metadata,
-            sa.Column('id', sa.Integer, primary_key=True),
-            sa.Column('collection', sa.Text, nullable=False),
-            sa.Column('deal_id', sa.Text, nullable=False),
-            sa.Column('date_loaded', sa.DateTime),
-            sa.Column('deal', JSONB, nullable=False),
-            sa.Column('metadata', JSONB)
-        )
-
-        self.org_table = sa.Table(
-            'organization', self.metadata,
-            sa.Column('id', sa.Integer, primary_key=True),
-            sa.Column('collection', sa.Text, nullable=False),
-            sa.Column('org_id', sa.Text, nullable=False),
-            sa.Column('date_loaded', sa.DateTime),
-            sa.Column('organization', JSONB, nullable=False),
-            sa.Column('metadata', JSONB)
-        )
-
     def upgrade(self):
-        # Let alembic create the tables
+        # only alembic commands should update the global db
+        global db
+        db = self
         print("Upgrading database")
 
+        # Let alembic create the tables
         alembic_cfg_path = os.path.abspath(os.path.join(
             os.path.dirname(__file__), 'alembic.ini'))
         alembicargs = [
@@ -84,5 +81,19 @@ class Database:
         ]
         alembic.config.main(argv=alembicargs)
 
+    def generate_migration(self, name):
+        # only alembic commands should update the global db
+        global db
+        db = self
+        print("Generating database migrations")
 
-db = Database()
+        alembic_cfg_path = os.path.abspath(os.path.join(
+            os.path.dirname(__file__), 'alembic.ini'))
+        alembicargs = [
+            '--config', alembic_cfg_path,
+            '--raiseerr',
+            'revision', '--autogenerate', '-m', name
+        ]
+        alembic.config.main(argv=alembicargs)
+
+
