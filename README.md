@@ -26,7 +26,7 @@ Alternatively rename `database.ini.tmpl` to `database.ini` and set params there.
 Flattentool command to unflatten sample data.
 
 ```
-flatten-tool unflatten -f xlsx -o unflattened.json -m deals --metatab-name Meta --metatab-vertical-orientation 'outfile.xlsx' --id-name identifier
+flatten-tool unflatten -f xlsx -o unflattened.json -m deals --metatab-name Meta --metatab-vertical-orientation 'outfile.xlsx'
 ```
 
 ## Servers
