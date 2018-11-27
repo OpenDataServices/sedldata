@@ -3,6 +3,7 @@ import html
 import json
 import os
 import getpass
+from collections import OrderedDict
 
 import alembic.config
 import jinja2
@@ -71,11 +72,14 @@ table = jinja2.Template(
 )
 
 
-def generate_rows(result, limit):
+def generate_rows(result, limit, to_html=False):
     for num, row in enumerate(result):
         if num == limit:
             break
-        yield [json.dumps(item, indent=2) if isinstance(item, dict) else html.escape(str(item)) for item in row]
+        if to_html:
+            yield [json.dumps(item, indent=2) if isinstance(item, dict) else html.escape(str(item)) for item in row]
+        else:
+            yield [item for item in row]
 
 
 class Session:
@@ -184,16 +188,21 @@ class Session:
         self.run_sql('''delete from deal where collection = %s ''', params=[collection])
         self.run_sql('''delete from organization where collection = %s ''', params=[collection])
 
-    def get_results(self, sql, limit=-1, params=None):
+    def get_results(self, sql, limit=-1, params=None, html=False, as_dicts=True):
 
         with self.db.engine.begin() as connection:
             params = params or []
             sql_result = connection.execute(sql, *params)
             if sql_result.returns_rows:
-                results = {
-                    "data": [row for row in generate_rows(sql_result, limit)],
-                    "headers": sql_result.keys()
-                }
+                results = {"headers": sql_result.keys()}
+                if as_dicts:
+                    data = []
+                    for row in generate_rows(sql_result, limit, html):
+                        data.append(OrderedDict(zip(sql_result.keys(), row)))
+                    results["data"] = data
+                else:
+                    results["data"] = [row for row in generate_rows(sql_result, limit, html)]
+
                 return results
             else:
                 return "Success"
@@ -201,7 +210,7 @@ class Session:
 
     def run_sql(self, sql, limit=100, params=None, display_full_json=False):
         from IPython.core.display import display, HTML
-        results = self.get_results(sql, limit, params)
+        results = self.get_results(sql, limit, params, html=True, as_dicts=False)
         if results == 'Success':
             return results
         results['display_full_json'] = display_full_json
