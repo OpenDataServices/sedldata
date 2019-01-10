@@ -69,7 +69,6 @@ class Database:
         # only alembic commands should update the global db
         global db
         db = self
-        print("Upgrading database")
 
         # Let alembic create the tables
         alembic_cfg_path = os.path.abspath(os.path.join(

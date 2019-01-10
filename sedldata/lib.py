@@ -143,15 +143,17 @@ class Session:
         for num, obj in enumerate(unflattened['deals']):
             now = datetime.datetime.now()
             obj_id = obj.get('id')
-            if not obj_id:
-                print(num)
-                print('WARNING: object {} has no id field'.format(obj))
-                continue
             if num in deal_indexes:
+                if not obj_id:
+                    print('WARNING: object {} has no id field'.format(obj))
+                    continue
                 obj_id = obj.get('id')
                 insert = self.db.deal_table.insert()
                 insert.execute(date_loaded=now, collection=collection, deal=obj, deal_id=obj_id, metadata=metadata)
             if num in org_indexes:
+                if not obj_id:
+                    obj['id'] = str(num)
+                    print('WARNING: object {} has no id field'.format(obj))
                 obj_id = obj['id']
                 insert = self.db.org_table.insert()
                 insert.execute(date_loaded=now, collection=collection, organization=obj, org_id=obj_id, metadata=metadata)
@@ -175,7 +177,10 @@ class Session:
                 continue
             xlsx_sheet = xlsx_workbook.create_sheet(sheet.title)
             data = spreadsheet.values_get(sheet.title, params={"valueRenderOption":"UNFORMATTED_VALUE", "dateTimeRenderOption": "FORMATTED_STRING"})
-            data = fill_gaps(data['values'])
+            values = data.get('values')
+            if not values:
+                continue
+            data = fill_gaps(values)
 
             for row in data:
                 xlsx_sheet.append(row)

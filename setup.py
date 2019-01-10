@@ -10,7 +10,7 @@ setup(
         'Click',
         'SQLAlchemy',
         'alembic',
-        'psycopg2',
+        'psycopg2-binary',
         'configparser',
         'jinja2',
         'gspread',
