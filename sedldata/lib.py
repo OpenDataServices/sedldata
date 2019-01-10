@@ -3,6 +3,7 @@ import html
 import json
 import os
 import getpass
+import csv
 from collections import OrderedDict
 
 import alembic.config
@@ -143,20 +144,27 @@ class Session:
         for num, obj in enumerate(unflattened['deals']):
             now = datetime.datetime.now()
             obj_id = obj.get('id')
+            deals = []
+            orgs = []
             if num in deal_indexes:
                 if not obj_id:
                     print('WARNING: object {} has no id field'.format(obj))
                     continue
                 obj_id = obj.get('id')
-                insert = self.db.deal_table.insert()
-                insert.execute(date_loaded=now, collection=collection, deal=obj, deal_id=obj_id, metadata=metadata)
+                deals.append(dict(date_loaded=now, collection=collection, deal=obj, deal_id=obj_id, metadata=metadata))
             if num in org_indexes:
                 if not obj_id:
                     obj['id'] = str(num)
                     print('WARNING: object {} has no id field'.format(obj))
-                obj_id = obj['id']
-                insert = self.db.org_table.insert()
-                insert.execute(date_loaded=now, collection=collection, organization=obj, org_id=obj_id, metadata=metadata)
+                obj_id = obj.get('id')
+                orgs.append(dict(date_loaded=now, collection=collection, organization=obj, org_id=obj_id, metadata=metadata))
+
+        if deals:
+            insert = self.db.deal_table.insert()
+            insert.execute(deals)
+        if orgs:
+            insert = self.db.org_table.insert()
+            insert.execute(orgs)
 
         now = datetime.datetime.now()
         print("Loaded %s at: %s" % (collection, now))
@@ -220,3 +228,31 @@ class Session:
             return results
         results['display_full_json'] = display_full_json
         display(HTML(table.render(results)))
+
+
+    def add_lookup_from_csv(self, lookup_name, key_name, infile=None):
+
+        if in_notebook() and not infile:
+            from google.colab import files
+            print('Upload your csv file:')
+            uploaded = files.upload()
+            for file_name in uploaded:
+                infile = 'uploaded.csv'
+                with open(infile, '+wb') as f:
+                    f.write(uploaded[file_name])
+                break
+
+        if not infile:
+            raise ValueError('You need to state an input file')
+
+
+        with self.db.engine.begin() as connection:
+            connection.execute('''delete from lookup_table where lookup_name = %s''', lookup_name)
+            rows = []
+            with open(infile) as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    rows.append(dict(lookup_name=lookup_name, data=row, lookup_key=row.get(key_name)))
+
+            insert = self.db.lookup_table.insert()
+            insert.execute(rows)

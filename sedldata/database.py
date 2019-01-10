@@ -37,6 +37,14 @@ class Database:
             sa.Column('metadata', JSONB)
         )
 
+        self.lookup_table = sa.Table(
+            'lookup_table', self.metadata,
+            sa.Column('id', sa.Integer, primary_key=True),
+            sa.Column('lookup_name', sa.Text, nullable=False),
+            sa.Column('lookup_key', sa.Text),
+            sa.Column('data', JSONB)
+        )
+
     def config(self, filename='database.ini', section='postgresql'):
         parser = ConfigParser()
         parser.read(filename)
