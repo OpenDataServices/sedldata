@@ -141,11 +141,12 @@ class Session:
                     org_indexes.add(index)
 
         metadata = {key: value for key, value in unflattened.items() if key != 'deals'}
+
+        deals = []
+        orgs = []
         for num, obj in enumerate(unflattened['deals']):
             now = datetime.datetime.now()
             obj_id = obj.get('id')
-            deals = []
-            orgs = []
             if num in deal_indexes:
                 if not obj_id:
                     print('WARNING: object {} has no id field'.format(obj))

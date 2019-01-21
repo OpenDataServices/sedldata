@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='sedldata',
-    version='0.0.6',
+    version='0.0.7',
     license='BSD',
     packages=['sedldata', 'sedldata.migrate', 'sedldata.migrate.versions'],
     package_data={'sedldata': ['alembic.ini'], 'sedldata.migrate': 'script.py.mako'},
