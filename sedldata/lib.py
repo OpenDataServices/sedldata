@@ -168,7 +168,13 @@ class Session:
             insert.execute(orgs)
 
         now = datetime.datetime.now()
+        self.refresh_views()
         print("Loaded %s at: %s" % (collection, now))
+
+
+    def refresh_views(self):
+        with self.db.engine.begin() as connection:
+            connection.execute('''REFRESH MATERIALIZED VIEW deal_summary; REFRESH MATERIALIZED VIEW collection_summary;''')
 
 
     def load_google_sheet(self, sheet_url=None, collection=None):
