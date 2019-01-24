@@ -98,8 +98,9 @@ app.layout = html.Div(className="container", children=[
 
 ## YEAR GRAPH
 
-def by_year_query(collections=None):
+def single_category_query(collections=None, year_range=None, aggregate='', order='asc'):
     collections = collections or tuple()
+    year_range = year_range or (2000, 9999)
     query = '''
     with year_summary as (select deal_summary.*,
     deal ->> 'id' deal_id,
@@ -120,7 +121,7 @@ def by_year_query(collections=None):
     from deal_summary) 
                                        
     select 
-        coalesce(year_summary.display_date, project_year.display_date) "year",
+            {aggregate} "category",
             sum(equity_count) equity_count, sum(equity_value) equity_value, sum(case when equity_estimated_value <> 0 then equity_estimated_value else equity_value end) estimated_equity_value,
             sum(credit_count) credit_count, sum(credit_value) credit_value, sum(case when credit_estimated_value <> 0 then credit_estimated_value else credit_value end) estimated_credit_value, 
             sum(grant_count) grant_count, 
@@ -132,31 +133,22 @@ def by_year_query(collections=None):
     left join 
             (select collection, project_id, max(display_date) as display_date 
          from year_summary where display_date is not null group by 1,2) project_year using(project_id, collection) 
-         where coalesce(year_summary.display_date, project_year.display_date) > 2013 {} 
-    group by 1 order by 1		   
+    where 
+         {aggregate} is not null and coalesce(year_summary.display_date, project_year.display_date) between %s and %s {collection} 
+    group by 1 order by 1 {order} 
     '''
-    if collections:
-        query = query.format('and collection in (' + ','.join(['%s']*len(collections)) + ')')
-    else:
-        query = query.format('')
-    return session.get_results(query, params=collections) 
+    collection_part = ('and collection in (' + ','.join(['%s']*len(collections)) + ')') if collections else ''
+    query = query.format(aggregate=aggregate, collection=collection_part, order=order)
+    return session.get_results(query, params=year_range + collections) 
 
-@app.callback(
-    Output(component_id='by-year-graph', component_property='figure'),
-    [Input(component_id='collection-dropdown', component_property='value'),
-     Input(component_id='value-type', component_property='value'),
-     Input(component_id='investment-type', component_property='value')]
-)
-def year_graph(collections, value_type, investment_type):
-    if collections:
-        collections = tuple(collections)
-    results = by_year_query(collections)
 
-    years = []
+def gather_measure_data(results, value_type, investment_type):
+
+    categories = []
     estimated_values = []
     values = []
     for result in results['data']:
-        years.append(result['year'])
+        categories.append(str(result['category']))
         if value_type == 'amount':
             if investment_type == 'deal':
                 estimated_values.append(result['estimated_equity_value'] + result['estimated_credit_value'] + result['estimated_grant_value'])
@@ -183,44 +175,64 @@ def year_graph(collections, value_type, investment_type):
                 values.append(result['{}_value'.format(investment_type)] / result['{}_count'.format(investment_type)])
                 estimated_values.append(result['estimated_{}_value'.format(investment_type)] / result['{}_count'.format(investment_type)])
 
+    return categories, estimated_values, values
+
+
+human_titles = {
+    "deal": "{} of Deals",
+    "credit": "{} of Credits",
+    "equity": "{} of Equities",
+    "grant": "{} of Grants",
+}
+
+def get_titles(value_type, investment_type):
+    if value_type == 'amount':
+        axis_title = 'Amount(£)'
+    if value_type == 'number':
+        axis_title = 'Number'
+    if value_type == 'average-amount':
+        axis_title = 'Average Amount(£)'
+    return axis_title, human_titles[investment_type].format(axis_title)
+
+@app.callback(
+    Output(component_id='by-year-graph', component_property='figure'),
+    [Input(component_id='collection-dropdown', component_property='value'),
+     Input(component_id='value-type', component_property='value'),
+     Input(component_id='investment-type', component_property='value'),
+     Input(component_id='year-range', component_property='value')]
+)
+def year_graph(collections, value_type, investment_type, year_range):
+    collections = collections or []
+    year_range = year_range or [2000, 9999]
+    results = single_category_query(tuple(collections), tuple(year_range), 'coalesce(year_summary.display_date, project_year.display_date)')
+
+    categories, estimated_values, values = gather_measure_data(results, value_type, investment_type)
+
     data = []
     if estimated_values:
         data.append(go.Bar(
-            x=years,
+            x=categories,
             y=estimated_values,
             name='Estimated Amounts'
         ))
 
     data.append(go.Bar(
-        x=years,
+        x=categories,
         y=values,
         name='Amounts'
     ))
-    
-    human_titles = {
-        "deal": "{} of Deals",
-        "credit": "{} of Credits",
-        "equity": "{} of Equities",
-        "grant": "{} of Grants",
-    }
 
-
-    if value_type == 'amount':
-        yaxis_title = 'Amount(£)'
-    if value_type == 'number':
-        yaxis_title = 'Number'
-    if value_type == 'average-amount':
-        yaxis_title = 'Average Amount(£)'
-    title = human_titles[investment_type].format(yaxis_title)
+    axis_title, title  = get_titles(value_type, investment_type)
 
     layout = go.Layout(
         title=title,
         barmode='group',
         yaxis=dict(
-            title=yaxis_title
+            title=axis_title
         ),
         xaxis=dict(
-            title='year'
+            title='year',
+            type='category'
         )
     )
 
@@ -229,49 +241,6 @@ def year_graph(collections, value_type, investment_type):
 
 ## Project Classification
 
-def project_classification_query(collections=None, year_range=None):
-    collections = collections or tuple()
-    year_range = year_range or (2000, 9999)
-    query = '''
-    with year_summary as (select deal_summary.*,
-    deal ->> 'id' deal_id,
-    deal -> 'projects' -> 0 ->> 'id' project_id,
-    convert_to_numeric(left(greatest(
-    deal -> 'projects' -> 0 ->> 'startDate',
-    deal -> 'projects' -> 0 ->> 'endDate',
-    deal ->> 'dealDate',
-    deal -> 'investments' -> 'equity' -> 0 ->> 'dateAgreed',
-    deal -> 'investments' -> 'equity' -> 0 ->> 'dateOffered',
-    deal -> 'investments' -> 'credit' -> 0 ->> 'dateAgreed',
-    deal -> 'investments' -> 'credit' -> 0 ->> 'dateOffered',
-    deal -> 'investments' -> 'grants' -> 0 ->> 'dateAgreed',
-    deal -> 'investments' -> 'grants' -> 0 ->> 'dateOffered',
-    deal -> 'offers' -> 0 ->> 'startDate',
-    deal -> 'offers' -> 0 ->> 'endDate'
-    ),4)) display_date
-    from deal_summary) 
-                                       
-    select 
-            trim(deal->'projects'->0->'classification'->0->>'title') classification,
-            sum(equity_count) equity_count, sum(equity_value) equity_value, sum(case when equity_estimated_value <> 0 then equity_estimated_value else equity_value end) estimated_equity_value,
-            sum(credit_count) credit_count, sum(credit_value) credit_value, sum(case when credit_estimated_value <> 0 then credit_estimated_value else credit_value end) estimated_credit_value, 
-            sum(grant_count) grant_count, 
-            sum(case when grant_amount_disbursed > 0 then grant_amount_disbursed else grant_amount_committed end) grant_value,
-            sum(case when grant_amount_requested > 0 then grant_amount_requested else case when grant_amount_disbursed > 0 then grant_amount_disbursed else grant_amount_committed end end) estimated_grant_value,
-            sum(value) deal_value,
-            count(*) deal_count
-    from year_summary 
-    left join 
-            (select collection, project_id, max(display_date) as display_date 
-         from year_summary where display_date is not null group by 1,2) project_year using(project_id, collection) 
-         where deal->'projects'->0->'classification'->0->>'title' is not null and coalesce(year_summary.display_date, project_year.display_date) between %s and %s {} 
-    group by 1 order by 1 desc   
-    '''
-    if collections:
-        query = query.format('and collection in (' + ','.join(['%s']*len(collections)) + ')')
-    else:
-        query = query.format('')
-    return session.get_results(query, params=year_range + collections) 
 
 def project_classification_exists_query(collections=None, year_range=None):
     collections = collections or tuple()
@@ -307,76 +276,33 @@ def project_clasification_appear(collections):
 def project_clasification(collections, value_type, investment_type, year_range):
     if collections:
         collections = tuple(collections)
-    results = project_classification_query(collections, tuple(year_range))
+    results = single_category_query(collections, tuple(year_range), '''trim(deal->'projects'->0->'classification'->0->>'title')''', 'desc')
 
-    classifications = []
-    estimated_values = []
-    values = []
-    for result in results['data']:
-        classifications.append(result['classification'])
-        if value_type == 'amount':
-            if investment_type == 'deal':
-                estimated_values.append(result['estimated_equity_value'] + result['estimated_credit_value'] + result['estimated_grant_value'])
-                values.append(result['equity_value'] + result['credit_value'] + result['grant_value'])
-            else:
-                estimated_values.append(result['estimated_{}_value'.format(investment_type)])
-                values.append(result['{}_value'.format(investment_type)])
-
-        if value_type == 'number':
-            if investment_type == 'deal':
-                values.append(result['deal_count'])
-            else:
-                values.append(result['{}_count'.format(investment_type)])
-
-        if value_type == 'average-amount':
-            if investment_type == 'deal':
-                values.append((result['equity_value'] + result['credit_value'] + result['grant_value']) / result['deal_count'])
-                estimated_values.append((result['estimated_equity_value'] + result['estimated_credit_value'] + result['estimated_grant_value']) / result['deal_count'])
-            else:
-                if not result['{}_count'.format(investment_type)]:
-                    estimated_values.append(0)
-                    values.append(0)
-                    continue
-                values.append(result['{}_value'.format(investment_type)] / result['{}_count'.format(investment_type)])
-                estimated_values.append(result['estimated_{}_value'.format(investment_type)] / result['{}_count'.format(investment_type)])
+    categories, estimated_values, values = gather_measure_data(results, value_type, investment_type)
 
     data = []
     if estimated_values:
         data.append(go.Bar(
-            y=classifications,
+            y=categories,
             x=estimated_values,
             orientation = 'h',
             name='Estimated Amounts'
         ))
 
     data.append(go.Bar(
-        y=classifications,
+        y=categories,
         x=values,
         orientation = 'h',
         name='Amounts'
     ))
     
-    human_titles = {
-        "deal": "{} of Deals",
-        "credit": "{} of Credits",
-        "equity": "{} of Equities",
-        "grant": "{} of Grants",
-    }
-
-
-    if value_type == 'amount':
-        yaxis_title = 'Amount(£)'
-    if value_type == 'number':
-        yaxis_title = 'Number'
-    if value_type == 'average-amount':
-        yaxis_title = 'Average Amount(£)'
-    title = human_titles[investment_type].format(yaxis_title)
+    axis_title, title  = get_titles(value_type, investment_type)
 
     layout = go.Layout(
         title=title,
         barmode='group',
         xaxis=dict(
-            title=yaxis_title
+            title=axis_title
         ),
         yaxis=dict(
         ),
