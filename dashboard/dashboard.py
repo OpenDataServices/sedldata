@@ -3,6 +3,7 @@ import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
 import plotly.graph_objs as go
+from collections import defaultdict
 
 import sedldata
 
@@ -26,13 +27,29 @@ app.layout = html.Div(className="container", children=[
                     dcc.Dropdown(
                         options=[
                             {'label': 'CSU', 'value': 'CSU'},
-                            {'label': 'KEY Fund', 'value': 'key-fund-005'},
+                            {'label': 'Key Fund', 'value': 'key-fund-005'},
                         ],
                         multi=True,
                         placeholder="All datasets",
                         id='collection-dropdown'
                     ),
 
+                ]),
+                html.Div(children=[
+                    html.Label('Select Part of Deal:', style={'margin-top': '15px', "font-weight": "bold"}),
+                    dcc.RadioItems(
+                        options=[
+                            {'label': 'Whole Deal', 'value': 'deal'},
+                            {'label': 'Offer', 'value': 'offer'},
+                            {'label': 'Equity', 'value': 'equity'},
+                            {'label': 'Grant', 'value': 'grant'},
+                            {'label': 'Credit', 'value': 'credit'},
+                        ],
+                        id='investment-type',
+                        labelStyle={'margin-right': '10px'},
+                        #inputStyle={'margin-top': '-3px'},
+                        value='deal'
+                    ),
                 ]),
                 html.Div(children=[
                     html.Label('Select Values:', style={'margin-top': '15px', "font-weight": "bold"}),
@@ -45,21 +62,6 @@ app.layout = html.Div(className="container", children=[
                         id='value-type',
                         labelStyle={'margin-right': '10px'},
                         value='number'
-                    ),
-                ]),
-                html.Div(children=[
-                    html.Label('Select Investment Type:', style={'margin-top': '15px', "font-weight": "bold"}),
-                    dcc.RadioItems(
-                        options=[
-                            {'label': 'Whole Deal', 'value': 'deal'},
-                            {'label': 'Equity', 'value': 'equity'},
-                            {'label': 'Grant', 'value': 'grant'},
-                            {'label': 'Credit', 'value': 'credit'},
-                        ],
-                        id='investment-type',
-                        labelStyle={'margin-right': '10px'},
-                        #inputStyle={'margin-top': '-3px'},
-                        value='deal'
                     ),
                 ]),
                 html.Div(children=[
@@ -76,27 +78,72 @@ app.layout = html.Div(className="container", children=[
         ]),
         html.Div(className="col-8", children=[
             html.Div(className="card mt-2 text-center", children=[
-                html.H5(className="card-header", children='Yearly Breakdown'),
-                dcc.Graph(id='by-year-graph',
-                    config={
-                        'displayModeBar': False
-                    },
-                )
+                html.H5(className="card-header", children='Summary'),
+                html.Div(className="card-body ", children=[
+                    html.H5(className="card-title", children='Total', id='total-text'),
+                    dcc.Graph(id='by-year-graph',
+                        config={
+                            'displayModeBar': False
+                        },
+                    )
+                ]),
             ]),
             html.Div(id='classification-card', className="card mt-2 text-center", children=[
                 html.H5(className="card-header", children='Project Classification'),
-                dcc.Graph(id='classification-graph',
-                    config={
-                        'displayModeBar': False
-                    },
-                )
+                html.Div(className="card-body ", children=[
+                    dcc.Graph(id='classification-graph',
+                        config={
+                            'displayModeBar': False
+                        },
+                    )
+                ]),
             ]),
         ])
     ])
 ])
 
 
-## YEAR GRAPH
+@app.callback(
+    Output(component_id='value-type', component_property='options'),
+    [Input(component_id='investment-type', component_property='value')])
+def change_value_type_options(investment_type):
+    if investment_type == 'deal':
+        return [
+            {'label': 'Number', 'value': 'number'},
+            {'label': 'Amount', 'value': 'amount'},
+            {'label': 'Estimated Amount', 'value': 'estimated-amount'},
+            {'label': 'Average amount', 'value': 'average-amount'},
+            {'label': 'Amount by investment type', 'value': 'amount-by-investment'}
+        ]
+    if investment_type == 'grant':
+        return [
+            {'label': 'Number', 'value': 'number'},
+            {'label': 'Amount', 'value': 'amount'},
+            {'label': 'Amount Requested ', 'value': 'estimated-amount'},
+            {'label': 'Average amount', 'value': 'average-amount'},
+        ]
+    if investment_type == 'offer':
+        return [
+            {'label': 'Offer Count', 'value': 'number'},
+            {'label': 'Investment Target', 'value': 'amount'},
+            {'label': 'Average Investment Target', 'value': 'average-amount'},
+        ]
+
+    return [
+            {'label': 'Number', 'value': 'number'},
+            {'label': 'Amount', 'value': 'amount'},
+            {'label': 'Estimated Amount', 'value': 'estimated-amount'},
+            {'label': 'Average amount', 'value': 'average-amount'},
+        ]
+
+
+@app.callback(
+    Output(component_id='value-type', component_property='value'),
+    [Input(component_id='investment-type', component_property='value')]
+)
+def change_value_type_value(investment_type):
+    return 'number'
+
 
 def single_category_query(collections=None, year_range=None, aggregate='', order='asc'):
     collections = collections or tuple()
@@ -122,11 +169,15 @@ def single_category_query(collections=None, year_range=None, aggregate='', order
                                        
     select 
             {aggregate} "category",
+            sum(offer_count) offer_count, 
+            sum(investment_target) total_investment_target, 
+            case when sum(case when investment_target > 0 then 1 else 0 end) = 0 then 0 else sum(investment_target)/sum(case when investment_target > 0 then 1 else 0 end) end average_investment_target,
             sum(equity_count) equity_count, sum(equity_value) equity_value, sum(case when equity_estimated_value <> 0 then equity_estimated_value else equity_value end) estimated_equity_value,
             sum(credit_count) credit_count, sum(credit_value) credit_value, sum(case when credit_estimated_value <> 0 then credit_estimated_value else credit_value end) estimated_credit_value, 
             sum(grant_count) grant_count, 
             sum(case when grant_amount_disbursed > 0 then grant_amount_disbursed else grant_amount_committed end) grant_value,
             sum(case when grant_amount_requested > 0 then grant_amount_requested else case when grant_amount_disbursed > 0 then grant_amount_disbursed else grant_amount_committed end end) estimated_grant_value,
+            sum(case when estimated_value > 0 then estimated_value else value end) estimated_value,
             sum(value) deal_value,
             count(*) deal_count
     from year_summary 
@@ -145,37 +196,58 @@ def single_category_query(collections=None, year_range=None, aggregate='', order
 def gather_measure_data(results, value_type, investment_type):
 
     categories = []
-    estimated_values = []
-    values = []
+    #estimated_values = []
+    values = defaultdict(list)
     for result in results['data']:
         categories.append(str(result['category']))
         if value_type == 'amount':
             if investment_type == 'deal':
-                estimated_values.append(result['estimated_equity_value'] + result['estimated_credit_value'] + result['estimated_grant_value'])
-                values.append(result['equity_value'] + result['credit_value'] + result['grant_value'])
+                #estimated_values.append(result['estimated_value'])
+                values['Amounts'].append(result['equity_value'] + result['credit_value'] + result['grant_value'])
+            elif investment_type == 'offer':
+                values['Amounts'].append(result['total_investment_target'])
             else:
-                estimated_values.append(result['estimated_{}_value'.format(investment_type)])
-                values.append(result['{}_value'.format(investment_type)])
+                #estimated_values.append(result['estimated_{}_value'.format(investment_type)])
+                values['Amounts'].append(result['{}_value'.format(investment_type)])
 
         if value_type == 'number':
             if investment_type == 'deal':
-                values.append(result['deal_count'])
+                values['Amounts'].append(result['deal_count'])
+            elif investment_type == 'offer':
+                values['Amounts'].append(result['offer_count'])
             else:
-                values.append(result['{}_count'.format(investment_type)])
+                values['Amounts'].append(result['{}_count'.format(investment_type)])
 
         if value_type == 'average-amount':
             if investment_type == 'deal':
-                values.append((result['equity_value'] + result['credit_value'] + result['grant_value']) / result['deal_count'])
-                estimated_values.append((result['estimated_equity_value'] + result['estimated_credit_value'] + result['estimated_grant_value']) / result['deal_count'])
+                values['Amounts'].append((result['equity_value'] + result['credit_value'] + result['grant_value']) / result['deal_count'])
+                #estimated_values.append((result['estimated_equity_value'] + result['estimated_credit_value'] + result['estimated_grant_value']) / result['deal_count'])
+            elif investment_type == 'offer':
+                values['Amounts'].append(result['average_investment_target'])
             else:
                 if not result['{}_count'.format(investment_type)]:
-                    estimated_values.append(0)
-                    values.append(0)
+                    #estimated_values.append(0)
+                    values['Amounts'].append(0)
                     continue
-                values.append(result['{}_value'.format(investment_type)] / result['{}_count'.format(investment_type)])
-                estimated_values.append(result['estimated_{}_value'.format(investment_type)] / result['{}_count'.format(investment_type)])
+                values['Amounts'].append(result['{}_value'.format(investment_type)] / result['{}_count'.format(investment_type)])
+                #estimated_values.append(result['estimated_{}_value'.format(investment_type)] / result['{}_count'.format(investment_type)])
 
-    return categories, estimated_values, values
+        if value_type == 'estimated-amount':
+            if investment_type == 'deal':
+                values['Estimated Amounts'].append(result['estimated_value'])
+                values['Amounts'].append(result['equity_value'] + result['credit_value'] + result['grant_value'])
+            else:
+                values['Estimated Amounts'].append(result['estimated_{}_value'.format(investment_type)])
+                values['Amounts'].append(result['{}_value'.format(investment_type)])
+
+        if value_type == 'amount-by-investment':
+            if investment_type == 'deal':
+                values['Equity'].append(result['equity_value'])
+                values['Credit'].append(result['credit_value'])
+                values['Grant'].append(result['grant_value'])
+
+
+    return categories, values
 
 
 human_titles = {
@@ -183,16 +255,66 @@ human_titles = {
     "credit": "{} of Credits",
     "equity": "{} of Equities",
     "grant": "{} of Grants",
+    "offer": "{} of Offers",
 }
 
 def get_titles(value_type, investment_type):
-    if value_type == 'amount':
-        axis_title = 'Amount(£)'
+
+    if value_type in ('amount', 'amount-by-investment'):
+        if investment_type == 'offer':
+            axis_title = 'Investment Target'
+        else:
+            axis_title = 'Amount'
+
     if value_type == 'number':
         axis_title = 'Number'
+
     if value_type == 'average-amount':
-        axis_title = 'Average Amount(£)'
+        if investment_type == 'offer':
+            axis_title = 'Average Investment Target'
+        else:
+            axis_title = 'Amount'
+
+    if value_type == 'estimated-amount':
+        if investment_type == 'grant':
+            axis_title = 'Requesed Amount'
+        else:
+            axis_title = 'Estimated Amount'
+
     return axis_title, human_titles[investment_type].format(axis_title)
+
+
+@app.callback(
+    Output(component_id='total-text', component_property='children'),
+    [Input(component_id='collection-dropdown', component_property='value'),
+     Input(component_id='value-type', component_property='value'),
+     Input(component_id='investment-type', component_property='value'),
+     Input(component_id='year-range', component_property='value')]
+)
+def total(collections, value_type, investment_type, year_range):
+    collections = collections or []
+    year_range = year_range or [2000, 9999]
+    results = single_category_query(tuple(collections), tuple(year_range), "'total'")
+
+    if value_type == 'amount-by-investment':
+        value_type = 'amount'
+    categories, values = gather_measure_data(results, value_type, investment_type)
+
+    estimated_amounts = values.get('Estimated Amounts')
+    amounts = values.get('Amounts')
+    if estimated_amounts:
+        result = estimated_amounts[0]
+    else:
+        result = amounts[0]
+
+    axis_title, title  = get_titles(value_type, investment_type)
+
+    prefix = '' if 'average' in value_type else 'Total '
+    currency = '£' if 'amount' in value_type else ''
+
+    return '{}{}: {}{:,.0f}'.format(prefix, title, currency, result)
+
+
 
 @app.callback(
     Output(component_id='by-year-graph', component_property='figure'),
@@ -206,27 +328,28 @@ def year_graph(collections, value_type, investment_type, year_range):
     year_range = year_range or [2000, 9999]
     results = single_category_query(tuple(collections), tuple(year_range), 'coalesce(year_summary.display_date, project_year.display_date)')
 
-    categories, estimated_values, values = gather_measure_data(results, value_type, investment_type)
+    categories, values = gather_measure_data(results, value_type, investment_type)
 
     data = []
-    if estimated_values:
+
+    for key, value in values.items():
         data.append(go.Bar(
             x=categories,
-            y=estimated_values,
-            name='Estimated Amounts'
+            y=value,
+            name=key
         ))
-
-    data.append(go.Bar(
-        x=categories,
-        y=values,
-        name='Amounts'
-    ))
 
     axis_title, title  = get_titles(value_type, investment_type)
 
+
+    if value_type == 'amount-by-investment':
+        barmode = 'stack'
+    else:
+        barmode = 'group'
+
     layout = go.Layout(
         title=title,
-        barmode='group',
+        barmode=barmode,
         yaxis=dict(
             title=axis_title
         ),
@@ -278,29 +401,27 @@ def project_clasification(collections, value_type, investment_type, year_range):
         collections = tuple(collections)
     results = single_category_query(collections, tuple(year_range), '''trim(deal->'projects'->0->'classification'->0->>'title')''', 'desc')
 
-    categories, estimated_values, values = gather_measure_data(results, value_type, investment_type)
+    categories, values = gather_measure_data(results, value_type, investment_type)
 
     data = []
-    if estimated_values:
+    for key, value in values.items():
         data.append(go.Bar(
             y=categories,
-            x=estimated_values,
-            orientation = 'h',
-            name='Estimated Amounts'
+            x=value,
+            name=key,
+            orientation = 'h'
         ))
 
-    data.append(go.Bar(
-        y=categories,
-        x=values,
-        orientation = 'h',
-        name='Amounts'
-    ))
-    
     axis_title, title  = get_titles(value_type, investment_type)
+
+    if value_type == 'amount-by-investment':
+        barmode = 'stack'
+    else:
+        barmode = 'group'
 
     layout = go.Layout(
         title=title,
-        barmode='group',
+        barmode=barmode,
         xaxis=dict(
             title=axis_title
         ),
