@@ -98,6 +98,41 @@ app.layout = html.Div(className="container", children=[
                     )
                 ]),
             ]),
+            html.Div(className="card mt-2 text-center", children=[
+                html.H5(className="card-header", children='Indices of Deprivation'),
+                html.Div(className="row", children=[
+                    html.Div(className="col-6", children=[
+                        html.Label('Select Country:', style={"font-weight": "bold"}),
+                        dcc.Dropdown(
+                            options=[
+                                {'label': 'England', 'value': 'imd_england'},
+                                {'label': 'Scotland', 'value': 'imd_scotland'},
+                            ],
+                            id='imd-country-dropdown',
+                            value='imd_england',
+                            searchable=False,
+                            clearable=False
+                        ),
+                    ]),
+                    html.Div(className="col-6", children=[
+                        html.Label('Select ranking:', style={"font-weight": "bold"}),
+                        dcc.Dropdown(
+                            id='imd-index-dropdown',
+                            searchable=False,
+                            clearable=False
+                        ),
+                    ]),
+                ]),
+                html.Div(children=[
+                    html.Div(className="card-body ", children=[
+                        dcc.Graph(id='deprivation-graph',
+                            config={
+                                'displayModeBar': False
+                            },
+                        )
+                    ]),
+                ]),
+            ]),
         ])
     ])
 ])
@@ -145,8 +180,9 @@ def change_value_type_value(investment_type):
     return 'number'
 
 
-def single_category_query(collections=None, year_range=None, aggregate='', order='asc'):
+def single_category_query(collections=None, year_range=None, aggregate='', order='asc', extra_params=None):
     collections = collections or tuple()
+    extra_params = extra_params or tuple()
     year_range = year_range or (2000, 9999)
     query = '''
     with year_summary as (select deal_summary.*,
@@ -190,7 +226,7 @@ def single_category_query(collections=None, year_range=None, aggregate='', order
     '''
     collection_part = ('and collection in (' + ','.join(['%s']*len(collections)) + ')') if collections else ''
     query = query.format(aggregate=aggregate, collection=collection_part, order=order)
-    return session.get_results(query, params=year_range + collections) 
+    return session.get_results(query, params=extra_params * 2 + year_range + collections) 
 
 
 def gather_measure_data(results, value_type, investment_type):
@@ -428,6 +464,102 @@ def project_clasification(collections, value_type, investment_type, year_range):
         yaxis=dict(
         ),
         margin=dict(l=200)
+    )
+    return dict(data=data, layout=layout)
+
+
+@app.callback(
+    Output(component_id='imd-index-dropdown', component_property='options'),
+    [Input(component_id='imd-country-dropdown', component_property='value')]
+)
+def imd_index_options(country):
+
+    if country == 'imd_england':
+        options=[
+            {"value": "Index of Multiple Deprivation (IMD) Decile (where 1 is most deprived 10% of LSOAs)", "label": "Index of Multiple Deprivation"},
+            {"value": "Crime Decile (where 1 is most deprived 10% of LSOAs)", "label": "Crime"}, 
+            {"value": "Income Decile (where 1 is most deprived 10% of LSOAs)", "label": "Income"},
+            {"value": "Employment Decile (where 1 is most deprived 10% of LSOAs)", "label": "Employment"},
+            {"value": "Living Environment Decile (where 1 is most deprived 10% of LSOAs)", "label": "Living Environment"},
+            {"value": "Education, Skills and Training Decile (where 1 is most deprived 10% of LSOAs)", "label": "Education, Skills and Training"},
+            {"value": "Barriers to Housing and Services Decile (where 1 is most deprived 10% of LSOAs)", "label": "Barriers to Housing and Services"},
+            {"value": "Geographical Barriers Sub-domain Decile (where 1 is most deprived 10% of LSOAs)", "label": "Geographical Barriers Sub-domain"},
+            {"value": "Health Deprivation and Disability Decile (where 1 is most deprived 10% of LSOAs)", "label": "Health Deprivation and Disability"},
+            {"value": "Income Deprivation Affecting Older People (IDAOPI) Decile (where 1 is most deprived 10% of LSOAs)", "label": "Income (Older People)"},
+            {"value": "Income Deprivation Affecting Children Index (IDACI) Decile (where 1 is most deprived 10% of LSOAs)", "label": "Income (Children)"}
+        ]
+    elif country == 'imd_scotland':
+        options=[
+            {"value": "Overall_SIMD16_Decile", "label": "Index of Multiple Deprivation"},
+            {"value": "Crime_domain_2016_decile", "label": "Crime"},
+            {"value": "Access_domain_2016_decile", "label": "Access"},
+            {"value": "Health_domain_2016_decile", "label": "Health"},
+            {"value": "Income_Domain_2016_Decile", "label": "Income"},
+            {"value": "Housing_domain_2016_decile", "label": "Housing"},
+            {"value": "Education_domain_2016_decile", "label": "Education"},
+            {"value": "Employment_domain_2016_decile", "label": "Employment"}
+        ]
+    return options
+
+@app.callback(
+    Output(component_id='imd-index-dropdown', component_property='value'),
+    [Input(component_id='imd-country-dropdown', component_property='value')]
+)
+def imd_index_initial_value(country):
+    if country == 'imd_england':
+        return 'Index of Multiple Deprivation (IMD) Decile (where 1 is most deprived 10% of LSOAs)'
+    elif country == 'imd_scotland':
+        return 'Overall_SIMD16_Decile'
+
+
+@app.callback(
+    Output(component_id='deprivation-graph', component_property='figure'),
+    [Input(component_id='collection-dropdown', component_property='value'),
+     Input(component_id='value-type', component_property='value'),
+     Input(component_id='investment-type', component_property='value'),
+     Input(component_id='year-range', component_property='value'),
+     Input(component_id='imd-index-dropdown', component_property='value'),
+    ]
+)
+def imd_graph(collections, value_type, investment_type, year_range, index):
+    if collections:
+        collections = tuple(collections)
+
+    results = single_category_query(collections, tuple(year_range), '''imd_data ->> %s ''', 'asc', (index,))
+
+    categories, values = gather_measure_data(results, value_type, investment_type)
+
+    deciles = [str(x) for x in range(1,11)]
+
+    data = []
+    for key, value in values.items():
+        decile_values = [0] * 10
+        for decile, decile_value in zip(categories, value):
+            decile_values[int(decile) - 1] = decile_value
+
+        data.append(go.Bar(
+            x=deciles,
+            y=decile_values,
+            name=key,
+        ))
+
+    axis_title, title  = get_titles(value_type, investment_type)
+
+    if value_type == 'amount-by-investment':
+        barmode = 'stack'
+    else:
+        barmode = 'group'
+
+    layout = go.Layout(
+        title=title,
+        barmode=barmode,
+        yaxis=dict(
+            title=axis_title
+        ),
+        xaxis=dict(
+            title='Decile (1 most deprived, 10 least deprived)',
+            type='category'
+        ),
     )
     return dict(data=data, layout=layout)
 

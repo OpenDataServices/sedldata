@@ -86,7 +86,7 @@ def upgrade():
          LEFT JOIN credit_summary cs ON cs.deal_table_id = deal.id
              left join jsonb_array_elements(deal->'recipientOrganization'->'location') as loc on loc->>'geoCodeType' = 'lsoa' 
              LEFT JOIN lookup_table lt1 on lt1.lookup_name in ('imd_england', 'imd_scotland', 'imd_wales') and lt1.lookup_key = loc->>'geoCode'
-             LEFT JOIN lookup_table lt2 on lt2.lookup_name = 'nuts3_post' and lt2.lookup_key = upper(replace(trim(deal->'recipientOrganization'->>'postalCode'), ' ',''))
+             LEFT JOIN lookup_table lt2 on lt2.lookup_name = 'nuts3_post' and lt2.lookup_key = upper(replace(replace(trim(deal->'recipientOrganization'->>'postalCode'), ' ',''), E'\n', ''))
              LEFT JOIN lookup_table lt3 on lt3.lookup_name = 'nuts2_codes' and lt3.lookup_key = lt2.data ->> 'NUTS_2';
 
 
