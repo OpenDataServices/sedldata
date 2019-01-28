@@ -5,6 +5,7 @@ import os
 import getpass
 import csv
 from collections import OrderedDict
+import io
 
 import alembic.config
 import jinja2
@@ -256,7 +257,7 @@ class Session:
         with self.db.engine.begin() as connection:
             connection.execute('''delete from lookup_table where lookup_name = %s''', lookup_name)
             rows = []
-            with open(infile) as f:
+            with io.open(infile, "r", encoding='utf-8-sig') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     rows.append(dict(lookup_name=lookup_name, data=row, lookup_key=row.get(key_name)))
