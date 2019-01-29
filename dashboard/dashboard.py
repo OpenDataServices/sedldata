@@ -1,3 +1,5 @@
+from urllib.parse import unquote
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -14,26 +16,33 @@ external_stylesheets = [
 ]
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+app.title = 'SEDL Dashboard'
+
+results = session.get_results('select dashboard.collection from dashboard join collection_summary using(collection)')
+
+options = [{'label': result['collection'], 'value': result['collection']} for result in results['data']]
 
 app.layout = html.Div(className="container", children=[
-
+    dcc.Location(id='url', refresh=False),
     html.Div(className="row", children=[
         html.Div(className="col-4", children=[
             html.Div(className="sticky-top pt-2", children=[
-                html.H3(className="", children='SEDL Dashboard'),
-                html.Br(),
-                html.Div(className = "", children=[
-                    html.Label('Select Datasets:', style={"font-weight": "bold"}),
-                    dcc.Dropdown(
-                        options=[
-                            {'label': 'CSU', 'value': 'CSU'},
-                            {'label': 'Key Fund', 'value': 'key-fund-005'},
-                        ],
-                        multi=True,
-                        placeholder="All datasets",
-                        id='collection-dropdown'
-                    ),
-
+                html.Div(id="hide-when-url", children=[
+                    html.H3(className="", children=[
+                        html.Img(alt="Social Economy Data Lab", src="http://socialeconomydatalab.org/img/logos/sedl_logo_nobkgd.svg",
+                                 style= {"width": "30px", "margin-right": "10px", "padding-bottom": "5px"}),
+                        'SEDL Dashboard'
+                    ]),
+                    html.Br(),
+                    html.Div(className = "", children=[
+                        html.Label('Select Datasets:', style={"font-weight": "bold"}),
+                        dcc.Dropdown(
+                            options=options,
+                            multi=True,
+                            placeholder="All datasets",
+                            id='collection-dropdown'
+                        ),
+                    ]),
                 ]),
                 html.Div(children=[
                     html.Label('Select Part of Deal:', style={'margin-top': '15px', "font-weight": "bold"}),
@@ -133,9 +142,37 @@ app.layout = html.Div(className="container", children=[
                     ]),
                 ]),
             ]),
+            html.Div(className="card mt-2 text-center", children=[
+                html.H5(className="card-header", children='Region'),
+                html.Div(className="card-body ", children=[
+                    dcc.Graph(id='region-graph',
+                        config={
+                            'displayModeBar': False
+                        },
+                    )
+                ]),
+            ]),
         ])
     ])
 ])
+
+
+@app.callback(
+    Output(component_id='hide-when-url', component_property='style'),
+    [Input(component_id='url', component_property='search')])
+def hide_when_url(url):
+    if url and url.startswith('?collection='):
+        return {"display": 'none'}
+    return {}
+
+
+@app.callback(
+    Output(component_id='collection-dropdown', component_property='value'),
+    [Input(component_id='url', component_property='search')])
+def select_collection_from_search(url):
+    if url and url.startswith('?collection='):
+        return [unquote(url.split('=')[1])]
+    return []
 
 
 @app.callback(
@@ -220,11 +257,12 @@ def single_category_query(collections=None, year_range=None, aggregate='', order
     left join 
             (select collection, project_id, max(display_date) as display_date 
          from year_summary where display_date is not null group by 1,2) project_year using(project_id, collection) 
+    join dashboard on dashboard.collection = year_summary.collection 
     where 
          {aggregate} is not null and coalesce(year_summary.display_date, project_year.display_date) between %s and %s {collection} 
     group by 1 order by 1 {order} 
     '''
-    collection_part = ('and collection in (' + ','.join(['%s']*len(collections)) + ')') if collections else ''
+    collection_part = ('and year_summary.collection in (' + ','.join(['%s']*len(collections)) + ')') if collections else ''
     query = query.format(aggregate=aggregate, collection=collection_part, order=order)
     return session.get_results(query, params=extra_params * 2 + year_range + collections) 
 
@@ -340,8 +378,10 @@ def total(collections, value_type, investment_type, year_range):
     amounts = values.get('Amounts')
     if estimated_amounts:
         result = estimated_amounts[0]
-    else:
+    elif amounts:
         result = amounts[0]
+    else:
+        result = 0
 
     axis_title, title  = get_titles(value_type, investment_type)
 
@@ -560,6 +600,49 @@ def imd_graph(collections, value_type, investment_type, year_range, index):
             title='Decile (1 most deprived, 10 least deprived)',
             type='category'
         ),
+    )
+    return dict(data=data, layout=layout)
+
+
+@app.callback(
+    Output(component_id='region-graph', component_property='figure'),
+    [Input(component_id='collection-dropdown', component_property='value'),
+     Input(component_id='value-type', component_property='value'),
+     Input(component_id='investment-type', component_property='value'),
+     Input(component_id='year-range', component_property='value')]
+)
+def region_clasification(collections, value_type, investment_type, year_range):
+    if collections:
+        collections = tuple(collections)
+    results = single_category_query(collections, tuple(year_range), '''nuts1''', 'desc')
+
+    categories, values = gather_measure_data(results, value_type, investment_type)
+
+    data = []
+    for key, value in values.items():
+        data.append(go.Bar(
+            y=categories,
+            x=value,
+            name=key,
+            orientation = 'h'
+        ))
+
+    axis_title, title  = get_titles(value_type, investment_type)
+
+    if value_type == 'amount-by-investment':
+        barmode = 'stack'
+    else:
+        barmode = 'group'
+
+    layout = go.Layout(
+        title=title,
+        barmode=barmode,
+        xaxis=dict(
+            title=axis_title
+        ),
+        yaxis=dict(
+        ),
+        margin=dict(l=200)
     )
     return dict(data=data, layout=layout)
 

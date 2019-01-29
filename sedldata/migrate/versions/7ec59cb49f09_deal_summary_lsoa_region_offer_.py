@@ -73,10 +73,10 @@ def upgrade():
         COALESCE(cs.credit_count, 0::bigint) AS credit_count,
         COALESCE(cs.credit_estimated_value, 0::numeric) AS credit_estimated_value,
         COALESCE(cs.credit_value, 0::numeric) AS credit_value,
-            loc->>'geoCode' lsoa, 
-            lt1.lookup_name imd_type, lt1.data imd_data,
-        lt3.data ->> 'nuts1_name' nuts1,
-            lt3.data ->> 'nuts2_name' nuts2,
+        loc->>'geoCode' lsoa, 
+        lt1.lookup_name imd_type, lt1.data imd_data,
+        case when upper(left(deal->'recipientOrganization'->>'postalCode', 2)) = 'BT' then 'Northern Ireland' else lt3.data ->> 'nuts1_name' end nuts1,
+        lt3.data ->> 'nuts2_name' nuts2,
         deal.deal
        FROM deal
          LEFT JOIN offer_summary os ON os.deal_table_id = deal.id

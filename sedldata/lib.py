@@ -107,7 +107,7 @@ class Session:
             self.gspread_client = gspread.authorize(GoogleCredentials.get_application_default())
         return self.gspread_client
 
-    def load_xlsx(self, collection=None, infile=None, outfile='output.json'):
+    def load_xlsx(self, collection=None, infile=None, outfile='output.json', append=False):
         if not collection and in_notebook():
             collection = input('Please state collections name: ')
         if not collection:
@@ -161,12 +161,18 @@ class Session:
                 obj_id = obj.get('id')
                 orgs.append(dict(date_loaded=now, collection=collection, organization=obj, org_id=obj_id, metadata=metadata))
 
-        if deals:
-            insert = self.db.deal_table.insert()
-            insert.execute(deals)
-        if orgs:
-            insert = self.db.org_table.insert()
-            insert.execute(orgs)
+        
+        with self.db.engine.begin() as connection:
+            if not append:
+                connection.execute(''' delete from deal where collection = %s ''', collection)
+                connection.execute(''' delete from organization where collection = %s ''', collection)
+
+            if deals:
+                insert = self.db.deal_table.insert()
+                connection.execute(insert, deals)
+            if orgs:
+                insert = self.db.org_table.insert()
+                connection.execute(insert, orgs)
 
         now = datetime.datetime.now()
         self.refresh_views()
@@ -206,8 +212,11 @@ class Session:
 
 
     def delete_collection(self, collection):
-        self.run_sql('''delete from deal where collection = %s ''', params=[collection])
-        self.run_sql('''delete from organization where collection = %s ''', params=[collection])
+        with self.db.engine.begin() as connection:
+            connection.execute('''delete from deal where collection = %s ''', collection)
+            connection.execute('''delete from organization where collection = %s ''', collection)
+        self.refresh_views()
+
 
     def get_results(self, sql, limit=-1, params=None, html=False, as_dicts=True):
 
@@ -264,3 +273,12 @@ class Session:
 
             insert = self.db.lookup_table.insert()
             insert.execute(rows)
+
+    def add_to_dashboard(self, collection):
+        with self.db.engine.begin() as connection:
+            connection.execute('''delete from dashboard where collection = %s ''', collection)
+            connection.execute('''insert into dashboard values (%s) ''', collection)
+
+    def delete_from_dashboard(self, collection):
+        with self.db.engine.begin() as connection:
+            connection.execute('''delete from dashboard where collection = %s ''', collection)

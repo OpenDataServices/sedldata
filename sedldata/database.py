@@ -45,6 +45,11 @@ class Database:
             sa.Column('data', JSONB)
         )
 
+        self.dashboard = sa.Table(
+            'dashboard', self.metadata,
+            sa.Column('collection', sa.Text, nullable=False, unique=True),
+        )
+
     def config(self, filename='database.ini', section='postgresql'):
         parser = ConfigParser()
         parser.read(filename)
