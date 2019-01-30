@@ -12,7 +12,8 @@ import sedldata
 session = sedldata.Session()
 
 external_stylesheets = [
-    'https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css'
+    'https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css',
+    'https://codepen.io/chriddyp/pen/brPBPO.css'
 ]
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
