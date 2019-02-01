@@ -6,6 +6,7 @@ import dash_html_components as html
 from dash.dependencies import Input, Output
 import plotly.graph_objs as go
 from collections import defaultdict
+from flask import jsonify
 
 import sedldata
 
@@ -19,9 +20,28 @@ external_stylesheets = [
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 app.title = 'SEDL Dashboard'
 
+server = app.server
+
 results = session.get_results('select dashboard.collection from dashboard join collection_summary using(collection)')
 
 options = [{'label': result['collection'], 'value': result['collection']} for result in results['data']]
+
+@server.route('/data.json')
+@server.route('/data/<collection>.json')
+def data(collection=None):
+    if not collection:
+        results = session.get_results('select deal, metadata from deal join dashboard using(collection)')
+    else:
+        results = session.get_results('select deal, metadata from deal join dashboard using(collection) where deal.collection=%s', params=[collection])
+
+    output = []
+    for result in results['data']:
+        result['metadata']['deal'] = result['deal']
+        output.append(result['metadata'])
+
+    return jsonify(output)
+
+
 
 app.layout = html.Div(className="container", children=[
     dcc.Location(id='url', refresh=False),
