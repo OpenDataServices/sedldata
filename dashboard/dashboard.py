@@ -22,10 +22,6 @@ app.title = 'SEDL Dashboard'
 
 server = app.server
 
-results = session.get_results('select dashboard.collection from dashboard join collection_summary using(collection)')
-
-options = [{'label': result['collection'], 'value': result['collection']} for result in results['data']]
-
 @server.route('/data.json')
 @server.route('/data/<collection>.json')
 def data(collection=None):
@@ -58,7 +54,7 @@ app.layout = html.Div(className="container", children=[
                     html.Div(className = "", children=[
                         html.Label('Select Datasets:', style={"font-weight": "bold"}),
                         dcc.Dropdown(
-                            options=options,
+                            options=[],
                             multi=True,
                             placeholder="All datasets",
                             id='collection-dropdown'
@@ -185,6 +181,15 @@ def hide_when_url(url):
     if url and url.startswith('?collection='):
         return {"display": 'none'}
     return {}
+
+
+@app.callback(
+    Output(component_id='collection-dropdown', component_property='options'),
+    [Input(component_id='url', component_property='pathname')])
+def collection_option_list(url):
+    results = session.get_results('select dashboard.collection from dashboard join collection_summary using(collection)')
+    options = [{'label': result['collection'], 'value': result['collection']} for result in results['data']]
+    return options
 
 
 @app.callback(
